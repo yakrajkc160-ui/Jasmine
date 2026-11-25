@@ -1,0 +1,212 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Shared Security Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isServerTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // --- Validation Helpers (Anti-Update-Gap Blueprints) ---
+    function isValidUserProfile(data) {
+      return data.uid is string && data.uid == request.auth.uid && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 320)) &&
+             (!('activePersona' in data) || (data.activePersona is string && data.activePersona.size() <= 80)) &&
+             (!('appTheme' in data) || (data.appTheme is string && data.appTheme.size() <= 40)) &&
+             (!('voiceEngine' in data) || (data.voiceEngine is string && data.voiceEngine.size() <= 40)) &&
+             isServerTimestamp(data.createdAt) &&
+             isServerTimestamp(data.updatedAt);
+    }
+
+    function isValidMemoryRecord(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.details is string && data.details.size() <= 4000 &&
+             data.dateAdded is int && data.dateAdded >= 0 &&
+             isServerTimestamp(data.createdAt) &&
+             isServerTimestamp(data.updatedAt);
+    }
+
+    function isValidChatRecord(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.sender is string && data.sender.size() >= 1 && data.sender.size() <= 40 &&
+             data.text is string && data.text.size() >= 1 && data.text.size() <= 8000 &&
+             data.timestamp is int && data.timestamp >= 0 &&
+             (!('planSummary' in data) || (data.planSummary is string && data.planSummary.size() <= 2000)) &&
+             (!('actionTaken' in data) || (data.actionTaken is string && data.actionTaken.size() <= 500)) &&
+             isServerTimestamp(data.createdAt) &&
+             isServerTimestamp(data.updatedAt);
+    }
+
+    function isValidNoteRecord(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.content is string && data.content.size() <= 10000 &&
+             data.isVoiceNote is bool &&
+             data.tag is string && data.tag.size() >= 1 && data.tag.size() <= 60 &&
+             data.timestamp is int && data.timestamp >= 0 &&
+             isServerTimestamp(data.createdAt) &&
+             isServerTimestamp(data.updatedAt);
+    }
+
+    function isValidRoutineRecord(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+             data.triggerPhrase is string && data.triggerPhrase.size() >= 1 && data.triggerPhrase.size() <= 300 &&
+             data.description is string && data.description.size() <= 1000 &&
+             data.icon is string && data.icon.size() <= 80 &&
+             data.isEnabled is bool &&
+             isServerTimestamp(data.createdAt) &&
+             isServerTimestamp(data.updatedAt);
+    }
+
+    // --- Collection Rules ---
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['uid', 'displayName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['uid', 'email', 'displayName', 'activePersona', 'appTheme', 'voiceEngine', 'createdAt', 'updatedAt']) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().uid == existing().uid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'activePersona', 'appTheme', 'voiceEngine', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Free voice seconds used per day (cannot go down, so Clear Data / reinstall cannot reset the limit)
+      match /usage/{dayId} {
+        allow get: if isOwner(userId) && dayId.matches('^[0-9]{8}$');
+
+        allow create: if isOwner(userId) &&
+                         dayId.matches('^[0-9]{8}$') &&
+                         incoming().keys().hasAll(['seconds', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['seconds', 'updatedAt']) &&
+                         incoming().seconds is int &&
+                         incoming().seconds >= 0 && incoming().seconds <= 86400 &&
+                         isServerTimestamp(incoming().updatedAt);
+
+        allow update: if isOwner(userId) &&
+                         dayId.matches('^[0-9]{8}$') &&
+                         incoming().keys().hasAll(['seconds', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['seconds', 'updatedAt']) &&
+                         incoming().seconds is int &&
+                         incoming().seconds >= existing().seconds && incoming().seconds <= 86400 &&
+                         isServerTimestamp(incoming().updatedAt);
+      }
+
+      match /memories/{memoryId} {
+        allow get: if isOwner(userId) && isValidId(memoryId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(memoryId) &&
+                         incoming().keys().hasAll(['userId', 'category', 'title', 'details', 'dateAdded', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'category', 'title', 'details', 'dateAdded', 'createdAt', 'updatedAt']) &&
+                         isValidMemoryRecord(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(memoryId) &&
+                         isValidMemoryRecord(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['category', 'title', 'details', 'dateAdded', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(memoryId);
+      }
+
+      match /chats/{chatId} {
+        allow get: if isOwner(userId) && isValidId(chatId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(chatId) &&
+                         incoming().keys().hasAll(['userId', 'sender', 'text', 'timestamp', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'sender', 'text', 'timestamp', 'planSummary', 'actionTaken', 'createdAt', 'updatedAt']) &&
+                         isValidChatRecord(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(chatId) &&
+                         isValidChatRecord(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['sender', 'text', 'timestamp', 'planSummary', 'actionTaken', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(chatId);
+      }
+
+      match /notes/{noteId} {
+        allow get: if isOwner(userId) && isValidId(noteId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(noteId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'content', 'isVoiceNote', 'tag', 'timestamp', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'content', 'isVoiceNote', 'tag', 'timestamp', 'createdAt', 'updatedAt']) &&
+                         isValidNoteRecord(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(noteId) &&
+                         isValidNoteRecord(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'content', 'isVoiceNote', 'tag', 'timestamp', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(noteId);
+      }
+
+      match /routines/{routineId} {
+        allow get: if isOwner(userId) && isValidId(routineId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(routineId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'triggerPhrase', 'description', 'icon', 'isEnabled', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'triggerPhrase', 'description', 'icon', 'isEnabled', 'createdAt', 'updatedAt']) &&
+                         isValidRoutineRecord(incoming(), userId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(routineId) &&
+                         isValidRoutineRecord(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'triggerPhrase', 'description', 'icon', 'isEnabled', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(routineId);
+      }
+    }
+  }
+}

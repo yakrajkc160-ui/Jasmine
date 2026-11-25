@@ -1,0 +1,6 @@
+{
+  "name": "Jasmine",
+  "description": "Autonomous voice-controlled personal AI assistant for mobile",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

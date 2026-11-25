@@ -1,0 +1,242 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated Jasmine user profile and synced preferences",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "activePersona": {
+          "type": "string",
+          "description": "Selected Jasmine persona name"
+        },
+        "appTheme": {
+          "type": "string",
+          "description": "Selected visual theme"
+        },
+        "voiceEngine": {
+          "type": "string",
+          "description": "Selected voice engine mode"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp() on creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp updated via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["uid", "displayName", "createdAt", "updatedAt"]
+    },
+    "MemoryRecord": {
+      "title": "MemoryRecord",
+      "description": "User personal memory item stored by Jasmine",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID"
+        },
+        "category": {
+          "type": "string",
+          "description": "Memory category"
+        },
+        "title": {
+          "type": "string",
+          "description": "Memory short title"
+        },
+        "details": {
+          "type": "string",
+          "description": "Detailed memory content"
+        },
+        "dateAdded": {
+          "type": "integer",
+          "description": "Epoch millis when the memory was created locally"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "category", "title", "details", "dateAdded", "createdAt", "updatedAt"]
+    },
+    "ChatRecord": {
+      "title": "ChatRecord",
+      "description": "Synced user-assistant conversation message",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID"
+        },
+        "sender": {
+          "type": "string",
+          "description": "Message sender identifier"
+        },
+        "text": {
+          "type": "string",
+          "description": "Chat message text"
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Epoch millis timestamp"
+        },
+        "planSummary": {
+          "type": "string",
+          "description": "Optional action plan summary"
+        },
+        "actionTaken": {
+          "type": "string",
+          "description": "Optional action execution summary"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "sender", "text", "timestamp", "createdAt", "updatedAt"]
+    },
+    "NoteRecord": {
+      "title": "NoteRecord",
+      "description": "Synced personal or voice note",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Note title"
+        },
+        "content": {
+          "type": "string",
+          "description": "Note body"
+        },
+        "isVoiceNote": {
+          "type": "boolean",
+          "description": "Whether captured via voice"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Note category tag"
+        },
+        "timestamp": {
+          "type": "integer",
+          "description": "Epoch millis timestamp"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "title", "content", "isVoiceNote", "tag", "timestamp", "createdAt", "updatedAt"]
+    },
+    "RoutineRecord": {
+      "title": "RoutineRecord",
+      "description": "Synced automation routine definition",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Routine title"
+        },
+        "triggerPhrase": {
+          "type": "string",
+          "description": "Voice trigger phrase"
+        },
+        "description": {
+          "type": "string",
+          "description": "Routine instructions"
+        },
+        "icon": {
+          "type": "string",
+          "description": "Icon identifier"
+        },
+        "isEnabled": {
+          "type": "boolean",
+          "description": "Routine enabled flag"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp set via FieldValue.serverTimestamp()"
+        }
+      },
+      "required": ["userId", "title", "triggerPhrase", "description", "icon", "isEnabled", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Per-user profile and preference settings"
+    },
+    "/users/{userId}/memories/{memoryId}": {
+      "schema": {
+        "$ref": "#/entities/MemoryRecord"
+      },
+      "description": "Per-user synced memories"
+    },
+    "/users/{userId}/chats/{chatId}": {
+      "schema": {
+        "$ref": "#/entities/ChatRecord"
+      },
+      "description": "Per-user synced conversation messages"
+    },
+    "/users/{userId}/notes/{noteId}": {
+      "schema": {
+        "$ref": "#/entities/NoteRecord"
+      },
+      "description": "Per-user synced notes"
+    },
+    "/users/{userId}/routines/{routineId}": {
+      "schema": {
+        "$ref": "#/entities/RoutineRecord"
+      },
+      "description": "Per-user synced automation routines"
+    }
+  }
+}
